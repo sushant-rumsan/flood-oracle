@@ -1,5 +1,7 @@
 # Chainlink Functions Fee Estimation
 
+_Calcluations are based on documentation of chainlink functions: https://docs.chain.link/chainlink-functions/resources/billing#cost-calculation-fulfillment_
+
 ## 1️⃣ How LINK Fee is Calculated
 
 When a Chainlink Functions request is fulfilled, the subscription is charged based on the gas used in the callback and a USD-denominated premium fee.

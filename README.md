@@ -1,7 +1,5 @@
 # Flood Data Aggregator & Trigger System
 
-_Calcluations are based on documentation of chainlink functions: https://docs.chain.link/chainlink-functions/resources/billing#cost-calculation-fulfillment_
-
 ## Oracle Contract
 
 - Use `registerSource` to add a new data source along with its JavaScript code.
