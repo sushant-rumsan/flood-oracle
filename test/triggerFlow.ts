@@ -3,40 +3,28 @@ import { network } from "hardhat";
 
 const { ethers } = await network.connect();
 
-describe("Trigger → Action Flow", function () {
+describe("Trigger → Condition Flow", function () {
   let trigger: any;
-  let action: any;
   let triggerId: bigint;
-  let encodedParams: string;
 
   const log = (msg: string) => console.log(`\x1b[36m${msg}\x1b[0m`);
 
   it("Should deploy Trigger contract", async function () {
-    trigger = await ethers.deployContract("Trigger");
+    trigger = await ethers.deployContract("TriggerContract", []);
     await trigger.waitForDeployment();
     log("✅ Deploying Trigger contract: Success");
   });
 
-  it("Should deploy Action contract", async function () {
-    action = await ethers.deployContract("Action");
-    await action.waitForDeployment();
-    log("✅ Deploying Action contract: Success");
-  });
-
-  it("Should register new Trigger", async function () {
-    const triggerStruct = {
-      triggerType: "flood",
-      phase: "READINESS",
-      title: "Flood Warning",
-      source: "DHM",
-      riverBasin: "Bagmati",
-      paramsHash: "0x1234",
-      isMandatory: true,
-      isTriggered: false,
-      actionContract: await action.getAddress(),
+  it("Should add new trigger with condition", async function () {
+    const conditionStruct = {
+      value: 5, // threshold
+      operator: ">=",
+      source: "water_level_m",
+      expression: "water_level_m >= 5",
+      sourceSubType: "warning_level",
     };
 
-    const tx = await trigger.registerTrigger(triggerStruct);
+    const tx = await trigger.addTrigger(conditionStruct);
     const receipt = await tx.wait();
 
     const event = receipt!.logs
@@ -47,7 +35,7 @@ describe("Trigger → Action Flow", function () {
           return null;
         }
       })
-      .find((e: any) => e?.name === "TriggerRegistered");
+      .find((e: any) => e?.name === "TriggerAdded");
 
     triggerId = event?.args?.triggerId;
     expect(triggerId).to.not.be.undefined;
@@ -55,36 +43,24 @@ describe("Trigger → Action Flow", function () {
     log(`✅ Adding trigger: Success (triggerId: ${triggerId})`);
   });
 
-  it("Should update trigger phase", async function () {
-    await expect(trigger.updateTrigger(triggerId, "ACTIVENESS", false))
-      .to.emit(trigger, "TriggerUpdated")
-      .withArgs(triggerId, "ACTIVENESS", false);
+  it("Should fail to set trigger if observed value does not meet condition", async function () {
+    const observedValue = 2; // below threshold
+    await expect(
+      trigger.setTrigger(triggerId, observedValue)
+    ).to.be.revertedWith("Condition not met");
 
-    log("✅ Updating trigger: Success");
+    log("✅ Condition failed as expected");
   });
 
-  it("Should set trigger to TRIGGERED and execute Action", async function () {
-    const [owner, addr1] = await ethers.getSigners();
-    const beneficiaries = [owner.address, addr1.address];
-    const amounts = [100, 200];
+  it("Should set trigger to triggered if observed value meets condition", async function () {
+    const observedValue = 6; // meets threshold
+    await expect(trigger.setTrigger(triggerId, observedValue))
+      .to.emit(trigger, "TriggerActivated")
+      .withArgs(triggerId, observedValue);
 
-    encodedParams = ethers.AbiCoder.defaultAbiCoder().encode(
-      ["address[]", "uint256[]"],
-      [beneficiaries, amounts]
-    );
+    const t = await trigger.getTrigger(triggerId);
+    expect(t.isTriggered).to.be.true;
 
-    await expect(trigger.setTriggered(triggerId, encodedParams))
-      .to.emit(trigger, "TriggerExecuted")
-      .withArgs(triggerId, await action.getAddress(), encodedParams);
-
-    log("✅ Setting trigger to triggered: Success");
-  });
-
-  it("Should check if Action contract received execution call", async function () {
-    await expect(trigger.setTriggered(triggerId, encodedParams))
-      .to.emit(action, "ActionExecuted")
-      .withArgs(triggerId, encodedParams, await trigger.getAddress());
-
-    log(`✅ Emitted event in Action contract: Success`);
+    log("✅ Trigger successfully activated after condition match");
   });
 });
